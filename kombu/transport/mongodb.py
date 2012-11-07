@@ -16,7 +16,8 @@ from Queue import Empty
 import pymongo
 from pymongo import errors
 from anyjson import loads, dumps
-from pymongo.connection import Connection, ReplicaSetConnection
+from pymongo.connection import Connection
+from pymongo import ReplicaSetConnection
 
 from kombu.exceptions import StdChannelError
 
@@ -114,8 +115,13 @@ class Channel(virtual.Channel):
 
         if not conninfo.hostname:
             conninfo.hostname = DEFAULT_HOST
+        
+        replicaset = None
+        if '#' in conninfo.hostname:
+            parts = conninfo.hostname.split('#')
+            replicaset = parts[1]
+            conninfo.hostname = parts[0]
 
-        options = {}
         for part in conninfo.hostname.split('/'):
             if not hostname:
                 hostname = 'mongodb://' + part
@@ -140,8 +146,8 @@ class Channel(virtual.Channel):
         #
         #   mongodb://[username:password@]host1[:port1][,host2[:port2],
         #   ...[,hostN[:portN]]][/[?replicaset=rsname]
-        if 'replicaset' in options:
-            mongoconn = ReplicaSetConnection(hostname, replicaset=options['replicaset'])
+        if replicaset:
+            mongoconn = ReplicaSetConnection(hostname, replicaset=replicaset)
         else:
             mongoconn = Connection(host=hostname)
         
