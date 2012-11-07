@@ -9,14 +9,14 @@ MongoDB transport.
 
 """
 from __future__ import absolute_import
+from urlparse import parse_qsl
 
 from Queue import Empty
 
 import pymongo
-
 from pymongo import errors
 from anyjson import loads, dumps
-from pymongo.connection import Connection
+from pymongo.connection import Connection, ReplicaSetConnection
 
 from kombu.exceptions import StdChannelError
 
@@ -115,6 +115,7 @@ class Channel(virtual.Channel):
         if not conninfo.hostname:
             conninfo.hostname = DEFAULT_HOST
 
+        options = {}
         for part in conninfo.hostname.split('/'):
             if not hostname:
                 hostname = 'mongodb://' + part
@@ -126,7 +127,8 @@ class Channel(virtual.Channel):
                 # to the mongodb connection. Right now
                 # it is not permitted by kombu
                 dbname, options = part.split('?')
-                hostname += '/?' + options
+                #hostname += '/?' + options
+                options = dict(parse_qsl(options))
 
         hostname = "%s/%s" % (hostname, dbname in [None, "/"] and "admin" \
                                                                     or dbname)
@@ -137,8 +139,12 @@ class Channel(virtual.Channel):
         # (considering replica set form too):
         #
         #   mongodb://[username:password@]host1[:port1][,host2[:port2],
-        #   ...[,hostN[:portN]]][/[?options]]
-        mongoconn = Connection(host=hostname)
+        #   ...[,hostN[:portN]]][/[?replicaset=rsname]
+        if 'replicaset' in options:
+            mongoconn = ReplicaSetConnection(hostname, replicaset=options['replicaset'])
+        else:
+            mongoconn = Connection(host=hostname)
+        
         version = mongoconn.server_info()['version']
         if tuple(map(int, version.split('.')[:2])) < (1, 3):
             raise NotImplementedError(
@@ -218,7 +224,7 @@ class Transport(virtual.Transport):
 
     polling_interval = 1
     default_port = DEFAULT_PORT
-    connection_errors = (errors.ConnectionFailure, )
+    connection_errors = (errors.ConnectionFailure, errors.AutoReconnect)
     channel_errors = (StdChannelError,
                       errors.ConnectionFailure,
                       errors.OperationFailure, )
