@@ -69,9 +69,17 @@ class Channel(virtual.Channel):
         return loads(msg['value']['payload'])
 
     def _size(self, queue):
-        if queue in self._fanout_queues:
-            return (self._queue_cursors[queue].count() -
-                    self._queue_readcounts[queue])
+        try:
+            if queue in self._fanout_queues:
+                return (self._queue_cursors[queue].count() -
+                        self._queue_readcounts[queue])
+        except KeyError:
+            if queue in self._queue_cursors:
+                del self._queue_cursors[queue]
+            if queue in self._queue_readcounts:
+                del self._queue_readcounts[queue]
+            if queue in self._fanout_queues:
+                del self._fanout_queues[queue]
 
         return self.client.messages.find({'queue': queue}).count()
 
